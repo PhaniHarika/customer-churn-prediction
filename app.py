@@ -1,5 +1,4 @@
 import streamlit as st
-import requests
 import pandas as pd
 import shap
 import pickle
@@ -18,7 +17,7 @@ st.markdown("""
 </style>""", unsafe_allow_html=True)
 
 st.markdown('<div class="title-text">📊 Customer Churn Prediction</div>', unsafe_allow_html=True)
-st.markdown('<p style="text-align:center;color:#aaa;">Powered by XGBoost + FastAPI + PostgreSQL</p>', unsafe_allow_html=True)
+st.markdown('<p style="text-align:center;color:#aaa;">Powered by XGBoost + SHAP + Streamlit</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 model = pickle.load(open('model/churn_model.pkl', 'rb'))
@@ -68,10 +67,19 @@ with tab1:
             "payment_method": payment, "monthly_charges": monthly,
             "total_charges": total
         }
-        res = requests.post("http://127.0.0.1:8000/predict", json=payload)
-        result = res.json()
-        prob = result['churn_probability']
-        churn = result['predicted_churn']
+
+        # Direct model prediction
+        df_input = pd.DataFrame([payload])
+        cat_cols = ['gender','partner','dependents','phone_service','multiple_lines',
+                    'internet_service','online_security','online_backup','device_protection',
+                    'tech_support','streaming_tv','streaming_movies','contract',
+                    'paperless_billing','payment_method']
+        for col in cat_cols:
+            le = encoders[col]
+            df_input[col] = le.transform(df_input[col].astype(str))
+        df_input = df_input[feature_cols]
+        prob = float(model.predict_proba(df_input)[0][1])
+        churn = "Yes" if prob >= 0.5 else "No"
 
         c1, c2 = st.columns(2)
         with c1:
@@ -99,17 +107,27 @@ with tab2:
     st.markdown("### SHAP Feature Importance")
     st.info("Shows which features most influence churn predictions")
     if st.button("📊 Generate SHAP Plot"):
-        from sqlalchemy import create_engine
-        engine = create_engine('postgresql://postgres:postgres123@localhost:5432/churn_db')
-        df = pd.read_sql('SELECT * FROM customers LIMIT 200', engine)
+        df_shap = pd.read_csv('data/WA_Fn-UseC_-Telco-Customer-Churn.csv')
+        df_shap['TotalCharges'] = pd.to_numeric(df_shap['TotalCharges'], errors='coerce').fillna(0)
+        df_shap.columns = [c.lower() for c in df_shap.columns]
+        df_shap = df_shap.rename(columns={
+            'customerid':'customer_id','seniorcitizen':'senior_citizen',
+            'phoneservice':'phone_service','multiplelines':'multiple_lines',
+            'internetservice':'internet_service','onlinesecurity':'online_security',
+            'onlinebackup':'online_backup','deviceprotection':'device_protection',
+            'techsupport':'tech_support','streamingtv':'streaming_tv',
+            'streamingmovies':'streaming_movies','paperlessbilling':'paperless_billing',
+            'paymentmethod':'payment_method','monthlycharges':'monthly_charges',
+            'totalcharges':'total_charges'
+        })
         cat_cols = ['gender','partner','dependents','phone_service','multiple_lines',
                     'internet_service','online_security','online_backup','device_protection',
                     'tech_support','streaming_tv','streaming_movies','contract',
                     'paperless_billing','payment_method','churn']
         for col in cat_cols:
             le = encoders[col]
-            df[col] = le.transform(df[col].astype(str))
-        X = df[feature_cols]
+            df_shap[col] = le.transform(df_shap[col].astype(str))
+        X = df_shap[feature_cols].head(200)
         explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(X)
         fig, ax = plt.subplots(figsize=(10, 6))
