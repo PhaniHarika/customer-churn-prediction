@@ -23,4 +23,4 @@ streamlit run app.py
 
 ## 👩‍💻 Built By
 **Phani Harika Soma** — B.Tech CSE-DS  
-[LinkedIn](https://linkedin.com/in/phaniharika-soma) • [GitHub](https://github.com/PhaniHarika)
+[LinkedIn](https://www.linkedin.com/in/phaniharika-soma-551a32326/) • [GitHub](https://github.com/PhaniHarika)
